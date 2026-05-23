@@ -91,16 +91,28 @@ public class BlockDamageScript extends ProjectileScript<WeaponProjectile> {
             particles.play(projectile, state, null, null);
         }
 
+        boolean broken = data.isBroken();
+        BlockDamage.BreakMode mode = damage.getBreakMode(state.getType().asBlockType());
+
         if (regenDelay != -1) {
-            if (damage.getBreakMode(state.getType().asBlockType()) == BlockDamage.BreakMode.BREAK && data.isBroken()) {
+            if (mode == BlockDamage.BreakMode.BREAK && broken) {
                 ServerImplementation scheduler = WeaponMechanicsCosmetics.getInstance().getFoliaScheduler();
                 scheduler.region(state.getLocation()).runDelayed(() -> {
                     data.regenerate();
                     data.remove();
                 }, regenDelay);
             }
-        } else if (data.isBroken()) {
+        } else if (broken) {
             data.remove();
+        }
+
+        if (broken && mode == BlockDamage.BreakMode.BREAK) {
+            try {
+                sounds.play(projectile, state);
+                particles.play(projectile, state, null, null);
+            } catch (Throwable t) {
+                WeaponMechanicsCosmetics.getInstance().getDebugger().warning("Couldn't play block damage: " + t.getMessage());
+            }
         }
     }
 }

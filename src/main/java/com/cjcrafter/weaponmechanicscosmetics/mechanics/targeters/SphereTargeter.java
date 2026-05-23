@@ -9,6 +9,7 @@ import me.deecaad.core.MechanicsCore;
 import me.deecaad.core.file.SerializeData;
 import me.deecaad.core.file.SerializerException;
 import me.deecaad.core.mechanics.CastData;
+import me.deecaad.core.mechanics.Targeters;
 import me.deecaad.core.mechanics.targeters.ShapeTargeter;
 import me.deecaad.core.mechanics.targeters.Targeter;
 import org.bukkit.NamespacedKey;
@@ -70,6 +71,12 @@ public class SphereTargeter extends ShapeTargeter {
 
     @Override
     public @NotNull Targeter serialize(@NotNull SerializeData data) throws SerializerException {
+        Targeter shape = data.of("Shape").serializeRegistry(Targeters.REGISTRY).orElse(null);
+
+        if (shape != null && !(shape instanceof me.deecaad.core.mechanics.targeters.ShapeTargeter)) {
+            throw data.exception("Shape", "Expected a shape targeter (Sphere, Scatter, Helix, etc.)");
+        }
+
         int points = data.of("Points").assertExists().getInt().getAsInt();
         double radius = data.of("Radius").assertExists().getDouble().getAsDouble();
 

@@ -61,20 +61,40 @@ public class BlockParticleSerializer implements Serializer<BlockParticleSerializ
         World world = projectile.getWorld();
 
         // Handle blacklists
-        if (materialBlacklist.contains(block.getType()) || weaponBlacklist.contains(projectile.getWeaponTitle()))
+        if (materialBlacklist.contains(block.getType().asBlockType()) || weaponBlacklist.contains(projectile.getWeaponTitle()))
             return;
 
         int amount = this.amount;
         double spread = this.spread;
+
+        Vector safeUp = UP;
 
         // Handle overrides
         ParticleMechanic override = overrides.get(block.getType());
         if (override != null && projectile.getShooter() != null) {
             if (hitLocation == null)
                 hitLocation = new Vector(block.getX() + 0.5, block.getY() + 0.5, block.getZ() + 0.5);
+
+            Vector dir = normal;
+
+            if (dir == null || dir.lengthSquared() == 0.0) {
+                dir = projectile.getNormalizedMotion();
+                if (dir == null || dir.lengthSquared() == 0.0) {
+                    dir = new Vector(0, 0, 1); // last resort fallback
+                }
+            }
+
+            dir = dir.clone().normalize();
+
+            // If dir is (almost) parallel to UP, choose a different up vector to avoid degeneracy
+            if (Math.abs(dir.dot(UP)) > 0.999) {
+                safeUp = new Vector(1, 0, 0);
+            }
+
             CastData cast = new CastData(projectile.getShooter(), projectile.getWeaponTitle(), projectile.getWeaponStack());
             cast.setTargetLocation(hitLocation.toLocation(world));
-            Quaternion localRotation = Quaternion.lookAt(normal, UP);
+
+            Quaternion localRotation = Quaternion.lookAt(dir, safeUp);
             override.display(cast, localRotation);
             return;
         }

@@ -48,6 +48,7 @@ public class ParticleMechanic extends Mechanic {
     private Object options;
     private boolean force;
 
+    private Targeter shape;
     private Targeter viewers;
     private List<Condition> viewerConditions;
 
@@ -58,7 +59,7 @@ public class ParticleMechanic extends Mechanic {
     }
 
     public ParticleMechanic(Particle particle, int count, double extra, VectorProvider offset, Object options,
-                            boolean force, Targeter viewers, List<Condition> viewerConditions) {
+                            boolean force, Targeter shape, Targeter viewers, List<Condition> viewerConditions) {
         this.particle = particle;
         this.count = count;
         this.extra = extra;
@@ -66,13 +67,22 @@ public class ParticleMechanic extends Mechanic {
         this.options = options;
         this.force = force;
 
+        this.shape = shape;
         this.viewers = viewers;
         this.viewerConditions = viewerConditions;
     }
 
     public void display(@NotNull CastData castData, @Nullable Quaternion localRotation) {
         Location location = castData.getTargetLocation();
+
+        if (location == null)
+            // I've noticed others using @Target{} in modules such as Shoot
+            // and that would result in a NPE, so in case that happens
+            // we simply get the source location (same as using @Source{...}
+            location = castData.getSourceLocation();
+
         World world = location.getWorld();
+        if (world == null) return;
 
         if (localRotation == null) {
             EntityTransform localTransform = castData.getTarget() == null ? null : new EntityTransform(castData.getSource());
@@ -81,9 +91,17 @@ public class ParticleMechanic extends Mechanic {
 
         Vector offset = this.offset.provide(localRotation);
         double extra = this.extra == -11 ? offset.length() / 20 : this.extra;
+        Object data = this.options;
+
+        // If the server says this particle needs 'Color' then we give
+        // it a default in case there isn't one defined in the config
+        Class<?> required = particle.getDataType();
+        if (data == null && required == Color.class) {
+            data = Color.fromARGB(255, 255, 255, 255); // default WHITE
+        }
 
         if (viewers == null) {
-            world.spawnParticle(particle, location.getX(), location.getY(), location.getZ(), count, offset.getX(), offset.getY(), offset.getZ(), extra, options, force);
+            world.spawnParticle(particle, location.getX(), location.getY(), location.getZ(), count, offset.getX(), offset.getY(), offset.getZ(), extra, data, force);
             return;
         }
 
@@ -100,13 +118,28 @@ public class ParticleMechanic extends Mechanic {
                     continue outer;
             }
 
-            player.spawnParticle(particle, location.getX(), location.getY(), location.getZ(), count, offset.getX(), offset.getY(), offset.getZ(), extra, options, force);
+            player.spawnParticle(particle, location.getX(), location.getY(), location.getZ(), count, offset.getX(), offset.getY(), offset.getZ(), extra, data, force);
         }
     }
 
     @Override
     protected void use0(CastData cast) {
-        display(cast, null);
+        if (shape == null) {
+            display(cast, null);
+            return;
+        }
+
+        CastData shaped = cast.clone();
+
+        if (shaped.getTargetLocation() == null) {
+            shaped.setTargetLocation(shaped.getSourceLocation());
+        }
+
+        Iterator<CastData> targets = shape.getTargets(shaped);
+        while (targets.hasNext()) {
+            targets.next();
+            display(shaped, null);
+        }
     }
 
     @Override
@@ -245,15 +278,27 @@ public class ParticleMechanic extends Mechanic {
             }
         }
 
+        // Paper 1.21.9+ changed some particles (ex. FLASH) to require Color data
+        // If the particle wants Color we get it from the config (or default to WHITE)
+        if (options == null && particle.getDataType() == Color.class) {
+            options = data.of("Color").serialize(new ColorSerializer()).orElse(Color.WHITE);
+        }
+
         // When the user didn't specify count and the plugin couldn't
         // automatically determine a count, we should set it to 1.
         if (count.isEmpty())
             count = OptionalInt.of(1);
 
+        Targeter shape = data.of("Shape").serializeRegistry(Targeters.REGISTRY).orElse(null);
+        if (shape != null && !(shape instanceof me.deecaad.core.mechanics.targeters.RelativeTargeter)) {
+            throw data.exception("Shape", "Expected a relative/shape targeter like Sphere{...}, Cube{...}, etc.");
+        }
+        forceUseTarget(shape);
+
         Targeter viewers = data.of("Viewers").serializeRegistry(Targeters.REGISTRY).orElse(null);
         List<Condition> viewerConditions = data.of("Viewer_Conditions").getRegistryList(Conditions.REGISTRY);
 
-        return applyParentArgs(data, new ParticleMechanic(particle, count.getAsInt(), extra, offset, options, force, viewers, viewerConditions));
+        return applyParentArgs(data, new ParticleMechanic(particle, count.getAsInt(), extra, offset, options, force, shape, viewers, viewerConditions));
     }
 
     private void noVelocity(Particle particle, SerializeData data) throws SerializerException {
@@ -289,15 +334,27 @@ public class ParticleMechanic extends Mechanic {
     }
 
     private void noColor(Particle particle, SerializeData data) throws SerializerException {
-        if (data.has("Color")) {
+        if (!data.has("Color"))
+            return;
+
+        XParticle xp = XParticle.of(particle);
+
+        boolean allowed =
+                xp == DUST || xp == DUST_COLOR_TRANSITION || xp == ENTITY_EFFECT
+                        // Allow Color for any particle that actually uses Color as its data type on this server
+                        || particle.getDataType() == Color.class
+                        // Let's allow color for FLASH even for older servers, we’ll just ignore it there (pre 1.21.9)
+                        || xp == FLASH;
+        if (!allowed) {
             String colorParticles = Stream.of(DUST, DUST_COLOR_TRANSITION, ENTITY_EFFECT)
-                .map(XParticle::get)
-                .map(Particle::name)
-                .map(String::toLowerCase)
-                .map(s -> "'" + s + "'")
-                .collect(Collectors.joining(", "));
+                    .map(XParticle::get)
+                    .map(Particle::name)
+                    .map(String::toLowerCase)
+                    .map(s -> "'" + s + "'")
+                    .collect(Collectors.joining(", "));
+
             throw data.exception("Color", "'" + particle + "' cannot use the 'Color' argument",
-                    "Only " + colorParticles + " can use 'Color'");
+                    "Only " + colorParticles + " (and particles whose data type is Color) can use 'Color'");
         }
     }
 
@@ -311,5 +368,27 @@ public class ParticleMechanic extends Mechanic {
     private @NotNull VectorProvider parseVector(SerializeData data, String relative) throws SerializerException {
         VectorProvider zero = new AnyVectorProvider(false, new ImmutableVector());
         return data.of(relative).serialize(VectorSerializer.class).orElse(zero);
+    }
+
+    private static final java.lang.reflect.Field RELATIVE_USE_TARGET_FIELD;
+
+    static {
+        java.lang.reflect.Field f = null;
+        try {
+            f = me.deecaad.core.mechanics.targeters.RelativeTargeter.class.getDeclaredField("isUseTarget");
+            f.setAccessible(true);
+        } catch (Throwable ignored) {
+        }
+        RELATIVE_USE_TARGET_FIELD = f;
+    }
+
+    private static void forceUseTarget(@Nullable Targeter targeter) {
+        if (targeter == null || RELATIVE_USE_TARGET_FIELD == null) return;
+        if (!(targeter instanceof me.deecaad.core.mechanics.targeters.RelativeTargeter)) return;
+
+        try {
+            RELATIVE_USE_TARGET_FIELD.setBoolean(targeter, true);
+        } catch (Throwable ignored) {
+        }
     }
 }
