@@ -12,6 +12,7 @@ import com.github.retrooper.packetevents.protocol.component.ComponentTypes;
 import com.github.retrooper.packetevents.protocol.component.builtin.item.ItemConsumable;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import com.github.retrooper.packetevents.protocol.nbt.NBTCompound;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.Equipment;
@@ -23,11 +24,20 @@ import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import com.cjcrafter.weaponmechanicscosmetics.config.ThirdPersonPose;
 import me.deecaad.weaponmechanics.WeaponMechanics;
 import me.deecaad.weaponmechanics.utils.CustomTag;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponScopeEvent;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponReloadEvent;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponReloadCompleteEvent;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponReloadCancelEvent;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponFirearmEvent;
 import me.deecaad.weaponmechanics.wrappers.HandData;
 import me.deecaad.weaponmechanics.wrappers.PlayerWrapper;
+import org.bukkit.Material;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerToggleSprintEvent;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -73,7 +83,8 @@ public class CrossbowPacketListener implements Listener, PacketListener {
 
         boolean shouldUpdatePacket = false;
         for (Equipment equipment : equipmentPacket.getEquipment()) {
-            if (equipment.getSlot() != EquipmentSlot.MAIN_HAND && equipment.getSlot() != EquipmentSlot.OFF_HAND)
+            EquipmentSlot slot = equipment.getSlot();
+            if (slot != EquipmentSlot.MAIN_HAND && slot != EquipmentSlot.OFF_HAND)
                 continue;
 
             com.github.retrooper.packetevents.protocol.item.ItemStack item = equipment.getItem();
@@ -87,40 +98,34 @@ public class CrossbowPacketListener implements Listener, PacketListener {
                 continue;
 
             // Determine which pose the gun should be in
-            boolean isMainhand = equipment.getSlot() == EquipmentSlot.MAIN_HAND;
-            HandData handData = playerWrapper.getHandData(isMainhand);
-            ThirdPersonPose.PoseOverride type;
-            if (handData.hasRunningFirearmAction())
-                type = poses.getFirearmActionPose();
-            else if (handData.isReloading())
-                type = poses.getReloadPose();
-            else if (handData.getZoomData().isZooming())
-                type = poses.getScopePose();
-            else
-                type = poses.getDefaultPose();
+            boolean isMainhand = slot == EquipmentSlot.MAIN_HAND;
+            ThirdPersonPose.PoseOverride poseOverride = getPoseOverride(poses, playerWrapper, isMainhand);
 
             // No need to change the item if we have no pose/override
-            if (type.pose() == ItemConsumable.Animation.NONE && type.overrideItem() == null) {
+            boolean hasVisualOverride = poseOverride.overrideItem() != null
+                    || poseOverride.overrideItemModel() != null
+                    || poseOverride.overrideCustomModelData() != null;
+
+            if (poseOverride.pose() == ItemConsumable.Animation.NONE && !hasVisualOverride) {
                 scheduleItemUsePacket(receiver, equipmentPacket.getEntityId(), false, isMainhand);
                 continue;
             }
 
-            if (type.overrideItem() != null)
-                item = type.overrideItem();
+            ItemStack visualItem = buildVisualItem(item, poseOverride);
 
             // Set the components to make the weapon "consumable" (yes, into food).
             // We can then send the "USE ITEM" packet to make the shooter hold the
             // weapon in the correct pose.
             ItemConsumable consumable = new ItemConsumable(
                 Float.MAX_VALUE, // a really long time, so the player never eats the item
-                type.pose(),
+                poseOverride.pose(),
                 Sounds.ITEM_CROSSBOW_QUICK_CHARGE_1,  // something quiet, should never be heard since consume time is high
                 false, // no particles
                 List.of() // no effects
             );
-            item.setComponent(ComponentTypes.CONSUMABLE, consumable);
+            visualItem.setComponent(ComponentTypes.CONSUMABLE, consumable);
 
-            equipment.setItem(item);
+            equipment.setItem(visualItem);
 
             shouldUpdatePacket = true;
             scheduleItemUsePacket(receiver, equipmentPacket.getEntityId(), true, isMainhand);
@@ -131,6 +136,200 @@ public class CrossbowPacketListener implements Listener, PacketListener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onReloadStart(WeaponReloadEvent event) {
+        if (!(event.getShooter() instanceof Player shooter)) return;
+        boolean isMainhand = event.isMainHand();
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, isMainhand),
+                1L
+        );
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onReloadComplete(WeaponReloadCompleteEvent event) {
+        if (!(event.getShooter() instanceof Player shooter)) return;
+        boolean isMainhand = event.isMainHand();
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, isMainhand),
+                1L
+        );
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onReloadCancel(WeaponReloadCancelEvent event) {
+        if (!(event.getShooter() instanceof Player shooter)) return;
+        boolean isMainhand = event.isMainHand();
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, isMainhand),
+                1L
+        );
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onFirearmAction(WeaponFirearmEvent event) {
+        if (!(event.getShooter() instanceof Player shooter)) return;
+
+        boolean isMainhand = event.isMainHand();
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, isMainhand),
+                1L
+        );
+
+        int t = event.getTime();
+        if (t > 0) {
+            WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                    () -> refreshThirdPersonPose(shooter, isMainhand),
+                    1L
+            );
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onScope(WeaponScopeEvent event) {
+        if (!(event.getShooter() instanceof Player shooter)) return;
+        boolean isMainhand = event.isMainHand();
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, isMainhand),
+                1L
+        );
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSprint(PlayerToggleSprintEvent event) {
+        Player shooter = event.getPlayer();
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, true),
+                1L
+        );
+
+        WeaponMechanics.getInstance().getFoliaScheduler().entity(shooter).runDelayed(
+                () -> refreshThirdPersonPose(shooter, false),
+                1L
+        );
+    }
+
+    private ThirdPersonPose.PoseOverride getPoseOverride(ThirdPersonPose poses, PlayerWrapper wrapper, boolean isMainhand) {
+        HandData handData = wrapper.getHandData(isMainhand);
+
+        if (handData.hasRunningFirearmAction()) return poses.getFirearmActionPose();
+        if (handData.isReloading()) return poses.getReloadPose();
+        if (handData.getZoomData().isZooming()) return poses.getScopePose();
+        if (wrapper.getPlayer().isSprinting()) return poses.getRunningPose();
+        return poses.getDefaultPose();
+    }
+
+    private void refreshThirdPersonPose(Player shooter, boolean isMainhand) {
+        PlayerWrapper wrapper = WeaponMechanics.getInstance().getPlayerWrapper(shooter);
+        refreshHand(shooter, wrapper, isMainhand);
+    }
+
+    private void refreshHand(Player shooter, PlayerWrapper wrapper, boolean isMainhand) {
+        org.bukkit.inventory.ItemStack bukkitStack = shooter.getEquipment().getItem(isMainhand ? org.bukkit.inventory.EquipmentSlot.HAND : org.bukkit.inventory.EquipmentSlot.OFF_HAND);
+
+        if (bukkitStack == null || bukkitStack.getType().isAir() || !bukkitStack.hasItemMeta()) {
+            return;
+        }
+
+        String weaponTitle = CustomTag.WEAPON_TITLE.getString(bukkitStack);
+        if (weaponTitle == null) return;
+
+        ThirdPersonPose poses = WeaponMechanics.getInstance().getWeaponConfigurations()
+                .getObject(weaponTitle + ".Cosmetics.Third_Person_Pose", ThirdPersonPose.class);
+        if (poses == null) return;
+
+        ThirdPersonPose.PoseOverride ovr = getPoseOverride(poses, wrapper, isMainhand);
+
+        boolean hasVisualOverride = ovr.overrideItem() != null
+                || ovr.overrideItemModel() != null
+                || ovr.overrideCustomModelData() != null;
+
+        // Build the base packet item from the real held stack
+        ItemStack original = SpigotConversionUtil.fromBukkitItemStack(bukkitStack);
+        ItemStack visual = buildVisualItem(original, ovr);
+
+        // If pose is NONE and no visual override, just “turn off” active hand for viewers
+        if (ovr.pose() == ItemConsumable.Animation.NONE && !hasVisualOverride) {
+            for (Player viewer : shooter.getWorld().getPlayers()) {
+                if (viewer.getEntityId() == shooter.getEntityId()) continue;
+                if (!viewer.canSee(shooter)) continue;
+                scheduleItemUsePacket(viewer, shooter.getEntityId(), false, isMainhand);
+            }
+            return;
+        }
+
+        ItemConsumable consumable = new ItemConsumable(
+                Float.MAX_VALUE,
+                ovr.pose(),
+                Sounds.ITEM_CROSSBOW_QUICK_CHARGE_1,
+                false,
+                List.of()
+        );
+        visual.setComponent(ComponentTypes.CONSUMABLE, consumable);
+
+        EquipmentSlot peSlot = isMainhand ? EquipmentSlot.MAIN_HAND : EquipmentSlot.OFF_HAND;
+        WrapperPlayServerEntityEquipment equipPacket =
+                new WrapperPlayServerEntityEquipment(shooter.getEntityId(), List.of(new Equipment(peSlot, visual)));
+
+        for (Player viewer : shooter.getWorld().getPlayers()) {
+            if (viewer.getEntityId() == shooter.getEntityId()) continue;
+            if (!viewer.canSee(shooter)) continue;
+
+            PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, equipPacket);
+            scheduleItemUsePacket(viewer, shooter.getEntityId(), ovr.pose() != ItemConsumable.Animation.NONE, isMainhand);
+        }
+    }
+
+    private ItemStack buildVisualItem(ItemStack original, ThirdPersonPose.PoseOverride ovr) {
+        // If config provided a full override item (Type present), we use it
+        if (ovr.overrideItem() != null)
+            return ovr.overrideItem();
+
+        // If the config is model-only we create a Bukkit stack and convert
+        if (ovr.overrideItemModel() != null || ovr.overrideCustomModelData() != null)
+            return buildModelOnlyVisual(ovr);
+
+        // No visual override, just keep original
+        return original;
+    }
+
+    private ItemStack buildModelOnlyVisual(ThirdPersonPose.PoseOverride type) {
+
+        // Base material can be anything (feather is fine), because Item_Model controls rendering
+        Material base = Material.FEATHER;
+        if (type.overrideItemModel() != null && "minecraft".equalsIgnoreCase(type.overrideItemModel().getNamespace())) {
+            Material m = Material.matchMaterial(type.overrideItemModel().getKey());
+            if (m != null) base = m;
+        }
+
+        org.bukkit.inventory.ItemStack bukkit = new org.bukkit.inventory.ItemStack(base);
+        org.bukkit.inventory.meta.ItemMeta meta = bukkit.getItemMeta();
+
+        if (meta != null) {
+            if (type.overrideItemModel() != null) {
+                org.bukkit.NamespacedKey modelKey =
+                        org.bukkit.NamespacedKey.fromString(type.overrideItemModel().toString());
+                if (modelKey != null) {
+                    meta.setItemModel(modelKey);
+                }
+            }
+
+            if (type.overrideCustomModelData() != null) {
+                meta.setCustomModelData(type.overrideCustomModelData());
+                //setCustomModelDataComponent(CustomModelDataComponent);
+            }
+
+            bukkit.setItemMeta(meta);
+        }
+
+        return SpigotConversionUtil.fromBukkitItemStack(bukkit);
+    }
 
     private void handleEntityMetadata(PacketSendEvent event) {
         WrapperPlayServerEntityMetadata metadataPacket = new WrapperPlayServerEntityMetadata(event);
