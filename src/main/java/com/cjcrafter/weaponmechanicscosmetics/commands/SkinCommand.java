@@ -26,10 +26,12 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.permissions.Permission;
-import org.bukkit.permissions.PermissionDefault;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -98,20 +100,32 @@ public class SkinCommand {
     }
 
     public static void register() {
-        new CommandAPICommand("skin")
-            .withAliases("skins", "weaponskin")
+        Configuration config = WeaponMechanicsCosmetics.getInstance().getConfiguration();
+
+        String weaponSkinCommand = getCommandName(config, "Commands.Weapon_Skin.Command", "weaponskin");
+        String[] weaponSkinAliases = getAliases(config, "Commands.Weapon_Skin.Aliases", weaponSkinCommand, List.of("wskin"));
+
+        new CommandAPICommand(weaponSkinCommand)
+            .withAliases(weaponSkinAliases)
             .withPermission("weaponmechanicscosmetics.commands.skin")
             .withShortDescription("Change the skin for your weapon")
             .withArguments(new StringArgument("skin").replaceSuggestions(ArgumentSuggestions.stringsWithTooltips(SKIN_SUGGESTIONS(false))))
             .executesPlayer((player, args) -> {
-                applySkin(player, "Skin", (String) args.get(0));
+                String skin = args.getUnchecked("skin");
+                applySkin(player, "Skin", skin);
             }).register();
-        new CommandAPICommand("handskin")
+        
+        String handSkinCommand = getCommandName(config, "Commands.Hand_Skin.Command", "handskin");
+        String[] handSkinAliases = getAliases(config, "Commands.Hand_Skin.Aliases", handSkinCommand, List.of("whandskin"));
+
+        new CommandAPICommand(handSkinCommand)
+            .withAliases(handSkinAliases)
             .withPermission("weaponmechanicscosmetics.commands.handskin")
             .withShortDescription("Change the skin for your hand")
             .withArguments(new StringArgument("skin").replaceSuggestions(ArgumentSuggestions.stringsWithTooltips(SKIN_SUGGESTIONS(true))))
             .executesPlayer((player, args) -> {
-                applySkin(player, "Hand", (String) args.get(0));
+                String skin = args.getUnchecked("skin");
+                applySkin(player, "Hand", skin);
             }).register();
     }
 
@@ -157,6 +171,71 @@ public class SkinCommand {
         stats.set(title, key.equals("Hand") ? WeaponStat.HAND_SKIN : WeaponStat.SKIN, skin);
         WeaponMechanicsCosmetics.getInstance().sendLang(player, "skin-success", variables);
         WeaponMechanics.getInstance().getWeaponHandler().getSkinHandler().tryUse(wrapper, title, weapon, mainHand ? EquipmentSlot.HAND : EquipmentSlot.OFF_HAND);
+    }
+
+    private static String getCommandName(Configuration config, String path, String fallback) {
+        String command = config.getString(path, fallback);
+
+        if (command == null || command.isBlank())
+            return fallback;
+
+        command = command.trim().toLowerCase(Locale.ROOT);
+
+        while (command.startsWith("/")) {
+            command = command.substring(1);
+        }
+
+        if (command.isBlank() || command.contains(" "))
+            return fallback;
+
+        return command;
+    }
+
+    private static String[] getAliases(Configuration config, String path, String command, List<String> fallback) {
+        Object object = config.getObject(path, fallback);
+        List<String> aliases = new ArrayList<>();
+
+        if (object instanceof List<?> list) {
+            for (Object element : list) {
+                if (element instanceof String string) {
+                    aliases.add(string);
+                }
+            }
+        } else if (object instanceof String string) {
+            aliases.add(string);
+        } else {
+            aliases.addAll(fallback);
+        }
+
+        return cleanAliases(command, aliases);
+    }
+
+    private static String[] cleanAliases(String command, List<String> aliases) {
+        Set<String> cleaned = new LinkedHashSet<>();
+
+        for (String alias : aliases) {
+            if (alias == null || alias.isBlank())
+                continue;
+
+            alias = alias.trim().toLowerCase(Locale.ROOT);
+
+            while (alias.startsWith("/")) {
+                alias = alias.substring(1);
+            }
+
+            if (alias.isBlank())
+                continue;
+
+            if (alias.contains(" "))
+                continue;
+
+            if (alias.equalsIgnoreCase(command))
+                continue;
+
+            cleaned.add(alias);
+        }
+
+        return cleaned.toArray(String[]::new);
     }
 
     private static boolean empty(ItemStack item) {
