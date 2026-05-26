@@ -21,6 +21,8 @@ Commands:
     Command: weaponskin
     Aliases:
       - wskin
+      - skin
+      - skins
 
   Hand_Skin:
     Command: handskin

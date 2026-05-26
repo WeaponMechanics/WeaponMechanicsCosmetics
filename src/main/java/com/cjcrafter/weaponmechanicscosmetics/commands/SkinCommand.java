@@ -103,7 +103,7 @@ public class SkinCommand {
         Configuration config = WeaponMechanicsCosmetics.getInstance().getConfiguration();
 
         String weaponSkinCommand = getCommandName(config, "Commands.Weapon_Skin.Command", "weaponskin");
-        String[] weaponSkinAliases = getAliases(config, "Commands.Weapon_Skin.Aliases", weaponSkinCommand, List.of("wskin"));
+        String[] weaponSkinAliases = getAliases(config, "Commands.Weapon_Skin.Aliases", weaponSkinCommand, List.of("wskin", "skin", "skins"));
 
         new CommandAPICommand(weaponSkinCommand)
             .withAliases(weaponSkinAliases)
