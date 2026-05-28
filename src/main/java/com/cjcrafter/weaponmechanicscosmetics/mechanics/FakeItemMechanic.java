@@ -19,11 +19,11 @@ import me.deecaad.core.mechanics.CastData;
 import me.deecaad.core.mechanics.defaultmechanics.Mechanic;
 import me.deecaad.core.utils.EntityTransform;
 import me.deecaad.core.utils.ImmutableVector;
-import me.deecaad.core.utils.Quaternion;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.joml.Quaterniond;
 
 public class FakeItemMechanic extends Mechanic {
 
@@ -49,7 +49,7 @@ public class FakeItemMechanic extends Mechanic {
 
         FakeEntity entity = CompatibilityAPI.getEntityCompatibility().generateFakeEntity(location, item);
         EntityTransform localTransform = cast.getTarget() == null ? null : new EntityTransform(cast.getTarget());
-        Quaternion localRotation = localTransform == null ? null : localTransform.getLocalRotation();
+        Quaterniond localRotation = localTransform == null ? null : localTransform.getLocalRotation();
 
         entity.setMotion(velocity.provide(localRotation).multiply(1.0 / 20.0));
         entity.show();

@@ -17,8 +17,8 @@ import me.deecaad.core.mechanics.MechanicManager;
 import me.deecaad.core.mechanics.Mechanics;
 import me.deecaad.core.mechanics.defaultmechanics.Mechanic;
 import me.deecaad.core.utils.EnumUtil;
-import me.deecaad.core.utils.Quaternion;
 import me.deecaad.core.utils.RandomUtil;
+import me.deecaad.core.utils.Transform;
 import me.deecaad.weaponmechanics.weapon.projectile.weaponprojectile.WeaponProjectile;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -27,6 +27,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.BlockType;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
+import org.joml.Quaterniond;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -74,7 +75,7 @@ public class BlockParticleSerializer implements Serializer<BlockParticleSerializ
                 hitLocation = new Vector(block.getX() + 0.5, block.getY() + 0.5, block.getZ() + 0.5);
             CastData cast = new CastData(projectile.getShooter(), projectile.getWeaponTitle(), projectile.getWeaponStack());
             cast.setTargetLocation(hitLocation.toLocation(world));
-            Quaternion localRotation = Quaternion.lookAt(normal, UP);
+            Quaterniond localRotation = Transform.lookAt(normal, UP);
             override.display(cast, localRotation);
             return;
         }

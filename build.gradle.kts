@@ -6,7 +6,7 @@
 import xyz.jpenilla.resourcefactory.paper.PaperPluginYaml
 
 group = "com.cjcrafter"
-version = "4.2.0"
+version = "4.3.0"
 
 plugins {
     `java-library`
@@ -30,6 +30,7 @@ paperPluginYaml {
 }
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven(url = "https://central.sonatype.com/repository/maven-snapshots/") // MechanicsCore Snapshots
     maven(url = "https://repo.papermc.io/repository/maven-public/") // Paper
@@ -43,11 +44,11 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
 
-    compileOnly("com.cjcrafter:mechanicscore:4.2.0-SNAPSHOT")
+    compileOnly("com.cjcrafter:mechanicscore:4.3.0-SNAPSHOT")
     compileOnly("com.cjcrafter:weaponmechanics:4.2.0-SNAPSHOT")
     compileOnly("com.cjcrafter:vivecraft:3.0.0")
     compileOnly("com.github.retrooper:packetevents-spigot:2.8.0")
-    compileOnly("com.github.cryptomorin:XSeries:13.3.1")
+    compileOnly("com.github.cryptomorin:XSeries:13.7.0")
     compileOnly("com.cjcrafter:foliascheduler:0.7.5")
     compileOnly("dev.jorel:commandapi-paper-core:11.1.0")
     compileOnly("org.bstats:bstats-bukkit:3.0.1")

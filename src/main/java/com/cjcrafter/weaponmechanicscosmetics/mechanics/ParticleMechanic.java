@@ -23,13 +23,13 @@ import me.deecaad.core.mechanics.defaultmechanics.Mechanic;
 import me.deecaad.core.mechanics.targeters.Targeter;
 import me.deecaad.core.utils.EntityTransform;
 import me.deecaad.core.utils.ImmutableVector;
-import me.deecaad.core.utils.Quaternion;
 import org.bukkit.*;
 import org.bukkit.block.BlockType;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Quaterniond;
 
 import java.util.Iterator;
 import java.util.List;
@@ -70,7 +70,7 @@ public class ParticleMechanic extends Mechanic {
         this.viewerConditions = viewerConditions;
     }
 
-    public void display(@NotNull CastData castData, @Nullable Quaternion localRotation) {
+    public void display(@NotNull CastData castData, @Nullable Quaterniond localRotation) {
         Location location = castData.getTargetLocation();
         World world = location.getWorld();
 
