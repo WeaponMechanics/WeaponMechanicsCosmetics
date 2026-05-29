@@ -6,7 +6,7 @@
 import xyz.jpenilla.resourcefactory.paper.PaperPluginYaml
 
 group = "com.cjcrafter"
-version = "4.3.0"
+version = "4.3.0-SNAPSHOT"
 
 plugins {
     `java-library`
