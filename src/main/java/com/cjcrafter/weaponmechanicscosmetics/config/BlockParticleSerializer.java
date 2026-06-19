@@ -61,8 +61,10 @@ public class BlockParticleSerializer implements Serializer<BlockParticleSerializ
     public void play(WeaponProjectile projectile, BlockState block, @Nullable Vector hitLocation, @Nullable Vector normal) {
         World world = projectile.getWorld();
 
+        BlockType blockType = block.getType().asBlockType();
+
         // Handle blacklists
-        if (materialBlacklist.contains(block.getType()) || weaponBlacklist.contains(projectile.getWeaponTitle()))
+        if (blockType == null || materialBlacklist.contains(blockType) || weaponBlacklist.contains(projectile.getWeaponTitle()))
             return;
 
         int amount = this.amount;
@@ -73,16 +75,28 @@ public class BlockParticleSerializer implements Serializer<BlockParticleSerializ
         if (override != null && projectile.getShooter() != null) {
             if (hitLocation == null)
                 hitLocation = new Vector(block.getX() + 0.5, block.getY() + 0.5, block.getZ() + 0.5);
+
+            Vector dir = normal;
+
+            if (dir == null || dir.lengthSquared() == 0.0) {
+                dir = projectile.getNormalizedMotion();
+                if (dir == null || dir.lengthSquared() == 0.0)
+                    dir = new Vector(0, 0, 1); // last resort fallback
+            }
+
+            dir = dir.clone().normalize();
+            Vector safeUp = Math.abs(dir.dot(UP)) > 0.999 ? new Vector(1, 0, 0) : UP.clone();
+
             CastData cast = new CastData(projectile.getShooter(), projectile.getWeaponTitle(), projectile.getWeaponStack());
             cast.setTargetLocation(hitLocation.toLocation(world));
-            Quaterniond localRotation = Transform.lookAt(normal, UP);
+            Quaterniond localRotation = Transform.lookAt(dir, safeUp);
             override.display(cast, localRotation);
             return;
         }
 
         // When there is no precise hit/normal, assume the block has been broken.
         // In this case, we want to spawn particles in all directions from the
-        // center fo the block.
+        // center of the block.
         if (hitLocation == null && normal == null) {
             Location spawnLoc = block.getLocation().add(0.5, 0.5, 0.5);
             world.spawnParticle(XParticle.BLOCK.get(), spawnLoc, amount, spread, spread, spread, block.getBlockData());
@@ -154,8 +168,6 @@ public class BlockParticleSerializer implements Serializer<BlockParticleSerializ
         }
 
         // Construct a list of materials that shouldn't have any effects.
-        // We use a map since EnumMap is very fast, and there is no EnumSet
-        // equivalent.
         Set<BlockType> materialBlacklist = new HashSet<>();
         List<List<Optional<Object>>> temp = data.ofList("Material_Blacklist")
             .addArgument(new RegistryValueSerializer<>(BlockType.class, true))

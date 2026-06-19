@@ -50,6 +50,8 @@ public class WeaponMechanicsCosmetics extends MechanicsPlugin {
 
     private @NotNull ClassLoader langLoader;
 
+    private CrossbowPacketListener crossbowPacketListener;
+
     public WeaponMechanicsCosmetics() {
         super(Style.style(NamedTextColor.GOLD), Style.style(NamedTextColor.GRAY), 15790);
     }
@@ -115,6 +117,10 @@ public class WeaponMechanicsCosmetics extends MechanicsPlugin {
         pm.registerEvents(new TimerSpawner(), this);
         pm.registerEvents(new WeaponMechanicsSerializerListener(), this);
         pm.registerEvents(new WeaponSkinListener(), this);
+        if (crossbowPacketListener == null) {
+            crossbowPacketListener = new CrossbowPacketListener(this);
+        }
+        pm.registerEvents(crossbowPacketListener, this);
         return super.handleListeners();
     }
 
@@ -122,8 +128,13 @@ public class WeaponMechanicsCosmetics extends MechanicsPlugin {
     public @NotNull CompletableFuture<Void> handlePacketListeners() {
         debugger.fine("Creating packet listeners");
 
+        if (crossbowPacketListener == null) {
+            crossbowPacketListener = new CrossbowPacketListener(this);
+            Bukkit.getPluginManager().registerEvents(crossbowPacketListener, this);
+        }
+
         EventManager em = PacketEvents.getAPI().getEventManager();
-        em.registerListener(new CrossbowPacketListener(this), PacketListenerPriority.NORMAL);
+        em.registerListener(crossbowPacketListener, PacketListenerPriority.NORMAL);
         return super.handlePacketListeners();
     }
 

@@ -10,7 +10,10 @@ import com.cjcrafter.weaponmechanicscosmetics.WeaponMechanicsCosmetics;
 import me.deecaad.core.events.EntityEquipmentEvent;
 import me.deecaad.core.file.Configuration;
 import me.deecaad.weaponmechanics.WeaponMechanics;
+import me.deecaad.weaponmechanics.weapon.reload.ammo.AmmoConfig;
 import me.deecaad.weaponmechanics.weapon.weaponevents.*;
+import me.deecaad.weaponmechanics.wrappers.PlayerWrapper;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -53,6 +56,23 @@ public class TimerSpawner implements Listener {
 
     @EventHandler (priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onReload(WeaponReloadEvent event) {
+        if (!(event.getShooter() instanceof Player player)) {
+            playTimer(event, ".Show_Time.Reload", event.getReloadCompleteTime());
+            return;
+        }
+
+        Configuration config = WeaponMechanics.getInstance().getWeaponConfigurations();
+        String weaponTitle = event.getWeaponTitle();
+        ItemStack weaponStack = event.getWeaponStack();
+
+        PlayerWrapper wrapper = WeaponMechanics.getInstance().getPlayerWrapper(player);
+        AmmoConfig ammo = config.getObject(weaponTitle + ".Reload.Ammo", AmmoConfig.class);
+
+        // Show time should not get triggered if there's no ammo ready to be reloaded
+        if (ammo != null && !ammo.hasAmmo(weaponTitle, weaponStack, wrapper)) {
+            return;
+        }
+
         playTimer(event, ".Show_Time.Reload", event.getReloadCompleteTime());
     }
 
