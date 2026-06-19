@@ -14,6 +14,21 @@ Logger_Config:
   Max_Alerts_To_Show: 5
   Alert_Interval: 300  # 15 seconds * 20 ticks per second
 
+# Controls the commands registered by WeaponMechanicsCosmetics.
+# Avoid using generic aliases like "skin" or "skins" if you use plugins like SkinsRestorer.
+Commands:
+  Weapon_Skin:
+    Command: weaponskin
+    Aliases:
+      - wskin
+      - skin
+      - skins
+
+  Hand_Skin:
+    Command: handskin
+    Aliases:
+      - whandskin
+
 # Global Explosion Effect configuration. Applies to every gun that uses
 # explosion, unless you add that gun to the 'Weapon_Blacklist'.
 Explosion_Effects:
